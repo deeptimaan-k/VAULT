@@ -63,7 +63,7 @@ function LoginScreen({ onSignIn, loading }: { onSignIn: () => void; loading: boo
               boxShadow: "0 16px 48px rgba(124,58,237,0.55), 0 0 80px rgba(124,58,237,0.2)",
             }}
           >
-            <img src="/logo.png" alt="Vasu Vault" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src="/logo.svg" alt="My Vault" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </motion.div>
 
           <motion.h1
@@ -72,7 +72,7 @@ function LoginScreen({ onSignIn, loading }: { onSignIn: () => void; loading: boo
             transition={{ delay: 0.25, type: "spring", stiffness: 260, damping: 24 }}
             style={{ margin: 0, marginBottom: 10, fontSize: 40, fontWeight: 900, color: "#fff", letterSpacing: "-1.5px", lineHeight: 1 }}
           >
-            Vasu{" "}
+            My{" "}
             <span style={{
               background: "linear-gradient(90deg, #a78bfa 0%, #818cf8 50%, #a78bfa 100%)",
               backgroundSize: "200% 100%",
