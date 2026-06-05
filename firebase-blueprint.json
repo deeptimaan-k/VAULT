@@ -1,0 +1,21 @@
+{
+  "entities": {
+    "VaultRecord": {
+      "title": "VaultRecord",
+      "description": "A single secure item stored inside user isolated vault",
+      "type": "object",
+      "properties": {
+        "sheetName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sheetName"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/records/{recordId}": {
+      "schema": "VaultRecord",
+      "description": "All personal records owned by the specific authenticated user"
+    }
+  }
+}

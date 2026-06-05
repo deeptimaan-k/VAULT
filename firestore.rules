@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // User isolated records
+    match /users/{userId}/records/{recordId} {
+      
+      function isSignedIn() {
+        return request.auth != null;
+      }
+      
+      function isOwner(uid) {
+        return isSignedIn() && request.auth.uid == uid;
+      }
+      
+      function isValidRecord(data) {
+        return data.sheetName is string 
+          && data.sheetName.size() >= 2
+          && data.sheetName.size() <= 128;
+      }
+      
+      // Users can only access their own private data
+      allow read: if isOwner(userId);
+      
+      allow create: if isOwner(userId) && isValidRecord(request.resource.data);
+      
+      allow update: if isOwner(userId) && isValidRecord(request.resource.data);
+      
+      allow delete: if isOwner(userId);
+    }
+  }
+}
