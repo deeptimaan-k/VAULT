@@ -57,20 +57,19 @@ export default function Sidebar({
           onClick={() => onSelectCategory(null)}
           style={{
             flexShrink: 0, width: 34, height: 34, borderRadius: 10,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            background: "linear-gradient(135deg,#7c3aed,#4f46e5)",
+            overflow: "hidden",
             boxShadow: "0 4px 16px rgba(124,58,237,0.45)",
             cursor: "pointer",
           }}
         >
-          <ShieldCheck style={{ width: 18, height: 18, color: "#fff", strokeWidth: 2 }} />
+          <img src="/logo.png" alt="Vasu Vault" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </motion.div>
 
         <AnimatePresence>
           {!collapsed && (
             <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.15 }} style={{ overflow: "hidden", flex: 1 }}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: "#fff", lineHeight: 1, whiteSpace: "nowrap" }}>
-                My <span className="shimmer-text">Vault</span>
+                Vasu <span className="shimmer-text">Vault</span>
               </p>
               <p style={{ margin: 0, marginTop: 2, fontSize: 8, fontWeight: 700, letterSpacing: "0.22em", textTransform: "uppercase", color: "rgba(100,116,139,0.7)", whiteSpace: "nowrap" }}>Secure Archive</p>
             </motion.div>
