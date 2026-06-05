@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useIsMobile } from "./hooks/useIsMobile";
 import { AnimatePresence, motion } from "framer-motion";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { onAuthStateChanged, signInWithPopup, signOut, User as FirebaseUser } from "firebase/auth";
@@ -186,6 +187,8 @@ export default function App() {
   const [confirmState, setConfirmState] = useState<ConfirmState>({
     open: false, title: "", message: "", onConfirm: () => {},
   });
+
+  const isMobile = useIsMobile();
 
   // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -387,7 +390,7 @@ export default function App() {
     return <LoginScreen onSignIn={handleSignIn} loading={signInLoading} />;
   }
 
-  const sidebarW = sidebarCollapsed ? 64 : 240;
+  const sidebarW  = sidebarCollapsed ? 64 : 240;
   const sidebarProps = {
     selectedCategory, showProfile,
     onSelectCategory: handleSelectCategory,
@@ -402,7 +405,7 @@ export default function App() {
   return (
     <div style={{
       display: "grid",
-      gridTemplateColumns: `${sidebarW}px 1fr`,
+      gridTemplateColumns: isMobile ? "1fr" : `${sidebarW}px 1fr`,
       gridTemplateRows: "auto 1fr",
       height: "100vh",
       overflow: "hidden",
@@ -416,8 +419,8 @@ export default function App() {
         <Sidebar {...sidebarProps} />
       </div>
 
-      {/* ── Header — row 1, col 2 ───────────────────────────────── */}
-      <div style={{ gridColumn: 2, gridRow: 1, zIndex: 10 }}>
+      {/* ── Header — row 1, col 2 (col 1 on mobile) ────────────── */}
+      <div style={{ gridColumn: isMobile ? 1 : 2, gridRow: 1, zIndex: 10 }}>
         <Header
           selectedCategory={selectedCategory}
           searchQuery={searchQuery}
@@ -429,8 +432,8 @@ export default function App() {
         />
       </div>
 
-      {/* ── Main content — row 2, col 2 ─────────────────────────── */}
-      <div style={{ gridColumn: 2, gridRow: 2, minHeight: 0, overflow: "hidden", position: "relative" }}>
+      {/* ── Main content — row 2, col 2 (col 1 on mobile) ─────── */}
+      <div style={{ gridColumn: isMobile ? 1 : 2, gridRow: 2, minHeight: 0, overflow: "hidden", position: "relative" }}>
         {/* Loading overlay */}
         <AnimatePresence>
           {dataLoading && (
@@ -550,6 +553,12 @@ export default function App() {
       <AIChat data={data} onNavigate={(catId) => {
         const cat = CATEGORIES.find(c => c.id === catId);
         if (cat) handleSelectCategory(cat);
+      }} onRecordAdded={async () => {
+        try {
+          const fetched = await fetchAllData();
+          setData(fetched.data);
+          setIsLive(fetched.isLive);
+        } catch { /* silent — user can refresh manually */ }
       }} />
     </div>
   );

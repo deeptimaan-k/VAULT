@@ -382,39 +382,84 @@ async function startServer() {
       return res.status(503).json({ error: "GEMINI_API_KEY not configured. Add it to .env." });
     }
 
-    const { message, vaultData, history = [] } = req.body;
-    if (!message?.trim()) return res.status(400).json({ error: "message is required" });
+    const { message, vaultData, history = [], files = [] } = req.body;
+    const hasFiles = Array.isArray(files) && files.length > 0;
 
-    const systemInstruction = `You are Vault AI, a smart personal assistant inside "My Vault" — a secure personal data manager. You have full access to the user's vault data below.
+    if (!message?.trim() && !hasFiles) {
+      return res.status(400).json({ error: "message or files required" });
+    }
 
-FORMATTING RULES (strictly follow):
-- Use plain bullet points with "• " (bullet character + space), NOT asterisks or dashes
-- Bold important labels like names or field titles using **text**
+    const ALLOWED_MIME = ["image/jpeg","image/png","image/webp","image/gif","application/pdf"];
+    if (hasFiles) {
+      for (const f of files as any[]) {
+        if (!ALLOWED_MIME.includes(f.mimeType))
+          return res.status(400).json({ error: `Unsupported file type: ${f.mimeType}` });
+        if ((f.base64?.length ?? 0) > 7_000_000)
+          return res.status(400).json({ error: "File too large. Max 4MB per file." });
+      }
+    }
+
+    const docMode = hasFiles ? `
+
+═══ DOCUMENT SCAN MODE ═══
+The user uploaded ${files.length === 2 ? "TWO images (FRONT + BACK of the same document)" : "ONE document image"}.
+
+Instructions:
+1. Read ALL visible text carefully — every number, name, date, address
+2. Identify the document type
+3. List every extracted field as bullet points using **Field**: Value format
+4. At the VERY END (last line), append the save tag:
+   [SAVE:CategoryName:{"Field":"Value"}]
+
+Category + field mapping:
+• Aadhaar Card  → [SAVE:PersonalData:{"Name":"","DOB":"","AdharNumber":"","MobileNumber":"","Address":""}]
+• PAN Card      → [SAVE:PersonalData:{"Name":"","DOB":"","PanNumber":"","FatherName":""}]
+• Driving Lic.  → [SAVE:PersonalData:{"Name":"","DOB":"","DrivingLicence":"","MobileNumber":"","Address":""}]
+• Passport      → [SAVE:PersonalData:{"Name":"","DOB":"","PassportNumber":"","Expiry":"","Address":""}]
+• Voter ID      → [SAVE:PersonalData:{"Name":"","DOB":"","EpicNumber":"","Address":""}]
+• Bank Passbook → [SAVE:FinancialData:{"AccountHolderName":"","BankName":"","AccountNumber":"","IFSC":"","AccountType":"","BranchName":""}]
+• Credit Card   → [SAVE:Card:{"CardHolderName":"","CardNumber":"","Expiry":"","CardType":"","IssuedBank":"","Debit/Credit":"Credit"}]
+• Debit Card    → [SAVE:Card:{"CardHolderName":"","CardNumber":"","Expiry":"","CardType":"","IssuedBank":"","Debit/Credit":"Debit"}]
+• Other         → [SAVE:Documents:{"Title":"","DocType":"","DocNumber":"","IssuedBy":"","IssueDate":"","ExpiryDate":""}]
+
+Rules: only fill clearly visible fields, leave others "", valid JSON, [SAVE:...] is the absolute last line.` : "";
+
+    const systemInstruction = `You are Radiant AI, a smart personal assistant inside "My Vault" — a secure personal data manager. You have full access to the user's vault data below.
+
+FORMATTING RULES:
+- Use plain bullet points with "• " (bullet + space), NOT asterisks or dashes
+- Bold important labels using **text**
 - Keep responses short and scannable
 - No markdown headers (#, ##), no --- dividers
-- If asked for a password or sensitive value, provide it directly — the user owns this data
+- If asked for a password or sensitive value, provide it — the user owns this data
 - Never make up data not in the vault
 
-NAVIGATION: At the very end of your reply, if the answer is specifically about ONE category, append exactly one of these tags on its own line:
-[NAVIGATE:personal] — for Personal Information
-[NAVIGATE:financial] — for Bank Accounts & Financial
-[NAVIGATE:card] — for Credit/Debit Cards
-[NAVIGATE:media] — for Social Media & Online Accounts
-[NAVIGATE:others] — for Other Records
-[NAVIGATE:documents] — for Documents & IDs
-Only add one tag when it makes sense to go there. Skip the tag for general questions.
+NAVIGATION: At the end of your reply for text queries only, if about ONE category append one tag:
+[NAVIGATE:personal] [NAVIGATE:financial] [NAVIGATE:card] [NAVIGATE:media] [NAVIGATE:others] [NAVIGATE:documents]
+Do NOT add NAVIGATE in document scan mode.
 
 USER'S VAULT DATA:
 ${buildVaultContext(vaultData)}
 
-Today: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}`;
+Today: ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })}${docMode}`;
 
     try {
       const contents: any[] = (history as any[]).slice(-10).map((m: any) => ({
         role: m.role === "bot" ? "model" : "user",
         parts: [{ text: m.content }],
       }));
-      contents.push({ role: "user", parts: [{ text: message }] });
+
+      // Build current message — images first, then text
+      const parts: any[] = [];
+      if (hasFiles) {
+        for (const f of files as any[]) {
+          if (f.base64 && f.mimeType) {
+            parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } });
+          }
+        }
+      }
+      parts.push({ text: message?.trim() || "Extract all information from this document and identify its type." });
+      contents.push({ role: "user", parts });
 
       const { text, model } = await callGemini(GEMINI_API_KEY, contents, systemInstruction);
       return res.json({ reply: text, model });
