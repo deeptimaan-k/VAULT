@@ -187,8 +187,11 @@ export const CATEGORIES: CategorySchema[] = [
     fields: [
       { key: "Title", label: "Document Name / Title", type: "text", placeholder: "e.g. Passport Photo 2026, My Aadhaar Card", required: true },
       { key: "DocType", label: "Document Category", type: "select", placeholder: "Select category", options: ["Passport Photo", "Aadhaar Card", "Driving Licence", "Voter ID Card", "PAN Card", "Other Document / Card"], required: true },
+      { key: "HolderName", label: "Full Name (as on document)", type: "text", placeholder: "e.g. AARAV SHARMA", required: false },
+      { key: "HolderDOB", label: "Date of Birth (DD/MM/YYYY)", type: "text", placeholder: "e.g. 14/08/1994", required: false },
+      { key: "Gender", label: "Gender", type: "select", placeholder: "Select gender", options: ["MALE", "FEMALE", "OTHER"], required: false },
       { key: "DocNumber", label: "Document ID / Reference No.", type: "text", placeholder: "e.g. Aadhaar No, Voter Card No, PAN No", required: false },
-      { key: "FileAttachment", label: "Upload Photo or PDF", type: "file", placeholder: "Select or drag & drop a PDF, JPG or PNG file", required: true }
+      { key: "FileAttachment", label: "Upload Photo or PDF", type: "file", placeholder: "Select or drag & drop a PDF, JPG or PNG file", required: false }
     ]
   }
 ];
@@ -318,8 +321,11 @@ export const INITIAL_SIMULATED_DATA: Record<string, any[]> = {
       _rowNum: 2,
       Title: "Adhar Scan Copy",
       DocType: "Aadhaar Card",
+      HolderName: "AARAV SHARMA",
+      HolderDOB: "14/08/1994",
+      Gender: "MALE",
       DocNumber: "5123 4567 8901",
-      FileAttachment: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='250' viewBox='0 0 400 250'><rect width='100%' height='100%' fill='%230f172a' rx='16'/><rect x='20' y='20' width='360' height='210' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-dasharray='4' rx='12'/><text x='40' y='60' fill='%23f1f5f9' font-family='sans-serif' font-size='20' font-weight='bold'>AADHAAR CARD</text><text x='40' y='90' fill='%2394a3b8' font-family='sans-serif' font-size='12'>Government of India</text><rect x='40' y='120' width='60' height='60' fill='%2338bdf8' opacity='0.2'/><path d='M50 130 h40 v40 h-40 z' fill='none' stroke='%2338bdf8' stroke-width='2'/><text x='120' y='140' fill='%23f1f5f9' font-family='sans-serif' font-size='14' font-weight='bold'>Aarav Sharma</text><text x='120' y='160' fill='%2394a3b8' font-family='sans-serif' font-size='12'>DOB: 14/08/1994</text><text x='40' y='210' fill='%2338bdf8' font-family='monospace' font-size='18' font-weight='bold'>5123  4567  8901</text></svg>"
+      FileAttachment: ""
     },
     {
       _rowNum: 3,

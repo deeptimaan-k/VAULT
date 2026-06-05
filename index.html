@@ -3,11 +3,94 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Vault</title>
+    <title>My Vault — Secure Personal Archive</title>
+    <meta name="description" content="My Vault — your encrypted personal archive for financial, personal, and digital records." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --font: 'Inter', system-ui, sans-serif;
+        --mono: 'JetBrains Mono', monospace;
+        --bg: #000008;
+        --bg2: #08081e;
+        --glass: rgba(255,255,255,0.04);
+        --border: rgba(255,255,255,0.07);
+        --violet: #7c3aed;
+        --indigo: #4f46e5;
+        --cyan: #06b6d4;
+      }
+      html { scroll-behavior: smooth; }
+      body { font-family: var(--font); background: var(--bg); color: #e2e8f0; overflow-x: hidden; }
+      code, pre, .mono { font-family: var(--mono) !important; }
+
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.35); border-radius: 99px; }
+
+      /* ── 3D card context ── */
+      .card-3d-wrap { perspective: 900px; }
+      .card-3d { transform-style: preserve-3d; }
+      .layer-0 { transform: translateZ(0px); }
+      .layer-1 { transform: translateZ(16px); }
+      .layer-2 { transform: translateZ(32px); }
+      .layer-3 { transform: translateZ(48px); }
+
+      /* ── Animations ── */
+      @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+      @keyframes glow-pulse { 0%,100%{opacity:.6} 50%{opacity:1} }
+      @keyframes shimmer { 0%{background-position:-200% center} 100%{background-position:200% center} }
+      @keyframes shimmer-slide { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+      @keyframes spin-slow { to{transform:rotate(360deg)} }
+      @keyframes scan { 0%{top:0%} 100%{top:100%} }
+
+      .float { animation: float 4s ease-in-out infinite; }
+      .glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+      .spin-slow { animation: spin-slow 8s linear infinite; }
+
+      .shimmer-text {
+        background: linear-gradient(90deg,#7c3aed,#a78bfa,#06b6d4,#818cf8,#7c3aed);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: shimmer 3s linear infinite;
+      }
+
+      /* ── Glass ── */
+      .glass {
+        background: rgba(255,255,255,0.03);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        border: 1px solid rgba(255,255,255,0.07);
+      }
+      .glass-dark {
+        background: rgba(0,0,12,0.7);
+        backdrop-filter: blur(32px) saturate(180%);
+        -webkit-backdrop-filter: blur(32px) saturate(180%);
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+
+      /* ── Holographic shimmer overlay ── */
+      .holo::after {
+        content:'';
+        position:absolute; inset:0;
+        background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%);
+        pointer-events:none;
+      }
+
+      /* ── Noise ── */
+      .noise {
+        position: fixed; inset: 0; z-index: 1; pointer-events: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+        opacity: 0.5;
+      }
+    </style>
   </head>
   <body>
+    <div class="noise"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
