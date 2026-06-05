@@ -100,117 +100,6 @@ function decodeFirebaseToken(token: string): { uid: string; email?: string } | n
   }
 }
 
-// Local JSON file-based database fallback for Sandbox Mode inside serverless context
-interface SandboxDoc {
-  _id: string;
-  userId: string;
-  sheetName: string;
-  data: any;
-  createdAt: string;
-  updatedAt: string;
-}
-
-const SANDBOX_FILE_PATH = "/tmp/sandbox_vault_db.json";
-
-function loadSandboxDocs(): SandboxDoc[] {
-  try {
-    if (fs.existsSync(SANDBOX_FILE_PATH)) {
-      return JSON.parse(fs.readFileSync(SANDBOX_FILE_PATH, "utf8"));
-    }
-  } catch (e) {
-    console.warn("[Sandbox DB Vercel] Cannot read file database, fallback to empty array.");
-  }
-  return [];
-}
-
-function saveSandboxDocs(docs: SandboxDoc[]) {
-  try {
-    fs.writeFileSync(SANDBOX_FILE_PATH, JSON.stringify(docs, null, 2), "utf8");
-  } catch (e) {
-    console.error("[Sandbox DB Vercel] Write failure:", e);
-  }
-}
-
-const DEFAULT_SEED_DATA: Record<string, any[]> = {
-  "PersonalData": [
-    {
-      Name: "Aarav Sharma",
-      DOB: "1994-08-14",
-      AdharNumber: "5123 4567 8901",
-      PanNumber: "BPLPS1234H",
-      DrivingLicence: "DL-1420160089234",
-      MobileNumber: "+91 98123 45678",
-      AlternateMobileNumber: "+91 98123 99999",
-      EmailID: "aarav.sharma@gmail.com",
-      EpicNumber: "XYZ1234567"
-    },
-    {
-      Name: "Diya Patel",
-      DOB: "2000-11-23",
-      AdharNumber: "9876 5432 1098",
-      PanNumber: "CLYPP9988G",
-      DrivingLicence: "GJ-0120190014321",
-      MobileNumber: "+91 98765 43210",
-      AlternateMobileNumber: "",
-      EmailID: "diya.patel@hotmail.com",
-      EpicNumber: "ABC9876543"
-    }
-  ],
-  "FinancialData": [
-    {
-      AccountHolderName: "Aarav Sharma",
-      AccountType: "Savings",
-      BankName: "HDFC Bank",
-      AccountNumber: "50100234567891",
-      IFSC: "HDFC0000012",
-      UserID: "aarav_hdfc_net",
-      Password: "SecurePassword123!",
-      LinkedMobileNumber: "+91 98123 45678",
-      LinkedEmail: "aarav.sharma@gmail.com",
-      SecurityAnswers: "First pet: Sparky. Place of birth: New Delhi.",
-      CustomerID: "88127394",
-      ProfilePassword: "ProfilePass1!"
-    }
-  ],
-  "Card": [
-    {
-      "Debit/Credit": "Credit",
-      CardType: "Visa",
-      IssuedBank: "SBI Card",
-      CardNumber: "4321-8899-7711-0022",
-      Expiry: "09/28",
-      CVV: "452",
-      PIN: "4102",
-      CardHolderName: "AARAV SHARMA"
-    }
-  ],
-  "Media/Gmail": [
-    {
-      Particulars: "Google Account (Primary)",
-      Userid: "as.sharma.1994@gmail.com",
-      Password: "MySuperSecretGmailPass2026",
-      MobileNumber: "+91 98123 45678",
-      RecoveryMail: "recovery.sharma@outlook.com"
-    }
-  ],
-  "Others": [
-    {
-      Particulars: "Apt B4 Wi-Fi",
-      Userid: "Sharma_Home_5G",
-      Password: "sharmasignalkey9988",
-      MobileNumber: "",
-      Remarks: "Router sits behind the main smart TV in the living room."
-    }
-  ],
-  "Documents": [
-    {
-      Title: "Adhar Scan Copy",
-      DocType: "Aadhaar Card",
-      DocNumber: "5123 4567 8901",
-      FileAttachment: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='250' viewBox='0 0 400 250'><rect width='100%' height='100%' fill='%230f172a' rx='16'/><rect x='20' y='20' width='360' height='210' fill='none' stroke='%2338bdf8' stroke-width='2' stroke-dasharray='4' rx='12'/><text x='40' y='60' fill='%23f1f5f9' font-family='sans-serif' font-size='20' font-weight='bold'>AADHAAR CARD</text><text x='40' y='90' fill='%2394a3b8' font-family='sans-serif' font-size='12'>Government of India</text><rect x='40' y='120' width='60' height='60' fill='%2338bdf8' opacity='0.2'/><path d='M50 130 h40 v40 h-40 z' fill='none' stroke='%2338bdf8' stroke-width='2'/><text x='120' y='140' fill='%23f1f5f9' font-family='sans-serif' font-size='14' font-weight='bold'>Aarav Sharma</text><text x='120' y='160' fill='%2394a3b8' font-family='sans-serif' font-size='12'>DOB: 14/08/1994</text><text x='40' y='210' fill='%2338bdf8' font-family='monospace' font-size='18' font-weight='bold'>5123  4567  8901</text></svg>"
-    }
-  ]
-};
 
 // Middleware Auth Gate & DB Connection Resolver
 const authenticateUser = async (req: any, res: any, next: any) => {
@@ -255,7 +144,7 @@ app.get("/api/mongodb/status", async (req: any, res: any) => {
   }
 });
 
-// Fetch all user records from MongoDB or Sandbox fallback
+// Fetch all user records from MongoDB
 app.get("/api/mongodb/records", authenticateUser, async (req: any, res: any) => {
   try {
     const grouped: Record<string, any[]> = {
@@ -267,73 +156,14 @@ app.get("/api/mongodb/records", authenticateUser, async (req: any, res: any) => 
       "Documents": []
     };
 
-    if (!isMongoConfigured) {
-      // --- Sandbox Mode fallback logic ---
-      let allDocs = loadSandboxDocs();
-      let userDocs = allDocs.filter(d => d.userId === req.userId);
-
-      if (userDocs.length === 0) {
-        console.log(`[Sandbox Vercel DB] Initializing sandbox-seed for empty vault of user: ${req.userId}...`);
-        const nowIso = new Date().toISOString();
-        const seedDocs: SandboxDoc[] = [];
-        for (const [sheetName, items] of Object.entries(DEFAULT_SEED_DATA)) {
-          items.forEach((item, index) => {
-            seedDocs.push({
-              _id: `${sheetName}_${req.userId}_${index}_${Math.random().toString(36).substr(2, 9)}`,
-              userId: req.userId,
-              sheetName,
-              data: item,
-              createdAt: nowIso,
-              updatedAt: nowIso
-            });
-          });
-        }
-        allDocs = [...allDocs, ...seedDocs];
-        saveSandboxDocs(allDocs);
-        userDocs = seedDocs;
-      }
-
-      userDocs.forEach((doc) => {
-        const cat = doc.sheetName;
-        if (grouped[cat]) {
-          grouped[cat].push({
-            _rowNum: doc._id,
-            sheetName: doc.sheetName,
-            ...doc.data
-          });
-        }
-      });
-
-      return res.json({ success: true, isLive: false, data: grouped });
-    }
-
-    // --- Live MongoDB logic ---
     let docs = await VaultRecord.find({ userId: req.userId });
-
-    // Auto-Seed defaults if MongoDB is completely empty for this user (First-time logins)
-    if (docs.length === 0) {
-      console.log(`[MongoDB Vercel] Initializing auto-seed for empty vault of user: ${req.userId}...`);
-      const promises: any[] = [];
-      for (const [sheetName, items] of Object.entries(DEFAULT_SEED_DATA)) {
-        for (const item of items) {
-          promises.push(new VaultRecord({
-            userId: req.userId,
-            sheetName,
-            data: item
-          }).save());
-        }
-      }
-      await Promise.all(promises);
-      // Retrieve again
-      docs = await VaultRecord.find({ userId: req.userId });
-    }
 
     docs.forEach((doc: any) => {
       const cat = doc.sheetName;
       if (grouped[cat]) {
         const rawData = doc.data instanceof Map ? Object.fromEntries(doc.data) : (doc.data || {});
         grouped[cat].push({
-          _rowNum: doc._id.toString(), // Support front-end visual mapping key (document id)
+          _rowNum: doc._id.toString(),
           sheetName: doc.sheetName,
           ...rawData
         });
@@ -347,7 +177,7 @@ app.get("/api/mongodb/records", authenticateUser, async (req: any, res: any) => 
   }
 });
 
-// Create new record in MongoDB or Sandbox fallback
+// Create new record in MongoDB
 app.post("/api/mongodb/records", authenticateUser, async (req: any, res: any) => {
   try {
     const { sheetName, ...data } = req.body;
@@ -355,25 +185,6 @@ app.post("/api/mongodb/records", authenticateUser, async (req: any, res: any) =>
       return res.status(400).json({ error: "sheetName is required" });
     }
 
-    if (!isMongoConfigured) {
-      // --- Sandbox Mode fallback logic ---
-      const allDocs = loadSandboxDocs();
-      const nowIso = new Date().toISOString();
-      const newId = `rec_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`;
-      const newDoc: SandboxDoc = {
-        _id: newId,
-        userId: req.userId,
-        sheetName,
-        data,
-        createdAt: nowIso,
-        updatedAt: nowIso
-      };
-      allDocs.push(newDoc);
-      saveSandboxDocs(allDocs);
-      return res.json({ success: true, message: "Record synchronized with Sandbox storage successfully (Offline Mode)!", id: newId });
-    }
-
-    // --- Live MongoDB logic ---
     const record = new VaultRecord({
       userId: req.userId,
       sheetName,
@@ -388,29 +199,14 @@ app.post("/api/mongodb/records", authenticateUser, async (req: any, res: any) =>
   }
 });
 
-// Update existing record in MongoDB or Sandbox fallback
+// Update existing record in MongoDB
 app.put("/api/mongodb/records/:id", authenticateUser, async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const { sheetName, ...data } = req.body;
 
-    // Clean up local layout numbering parameters or automatic parameters
     const { _rowNum, createdAt, updatedAt, ...cleanData } = data;
 
-    if (!isMongoConfigured) {
-      // --- Sandbox Mode fallback logic ---
-      const allDocs = loadSandboxDocs();
-      const docIndex = allDocs.findIndex(d => d._id === id && d.userId === req.userId);
-      if (docIndex === -1) {
-        return res.status(404).json({ error: "Item not found or unauthorized to update in sandbox." });
-      }
-      allDocs[docIndex].data = cleanData;
-      allDocs[docIndex].updatedAt = new Date().toISOString();
-      saveSandboxDocs(allDocs);
-      return res.json({ success: true, message: "Record successfully updated in local Sandbox storage!" });
-    }
-
-    // --- Live MongoDB logic ---
     const record = await VaultRecord.findOneAndUpdate(
       { _id: id, userId: req.userId },
       { $set: { data: cleanData } },
@@ -419,6 +215,14 @@ app.put("/api/mongodb/records/:id", authenticateUser, async (req: any, res: any)
 
     if (!record) {
       return res.status(404).json({ error: "Item not found or unauthorized to update." });
+    }
+
+    res.json({ success: true, message: "Record updated successfully!", id: record._id });
+  } catch (err: any) {
+    console.error("[MongoDB Vercel] Update error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
     }
 
     res.json({ success: true, message: "Record successfully updated in secure MongoDB Database!" });
@@ -433,19 +237,6 @@ app.delete("/api/mongodb/records/:id", authenticateUser, async (req: any, res: a
   try {
     const { id } = req.params;
 
-    if (!isMongoConfigured) {
-      // --- Sandbox Mode fallback logic ---
-      let allDocs = loadSandboxDocs();
-      const beforeLen = allDocs.length;
-      allDocs = allDocs.filter(d => !(d._id === id && d.userId === req.userId));
-      if (allDocs.length === beforeLen) {
-        return res.status(404).json({ error: "Item not found or unauthorized to delete in sandbox." });
-      }
-      saveSandboxDocs(allDocs);
-      return res.json({ success: true, message: "Record permanently removed from local Sandbox storage!" });
-    }
-
-    // --- Live MongoDB logic ---
     const record = await VaultRecord.findOneAndDelete({ _id: id, userId: req.userId });
 
     if (!record) {
