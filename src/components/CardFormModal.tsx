@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Save, AlertCircle, Upload, FileText, Trash2, Camera, RefreshCw, CheckCircle2 } from "lucide-react";
+import {
+  X, Save, AlertCircle, Upload, FileText, Trash2,
+  Camera, RefreshCw, User, Briefcase, CreditCard, Mail, Lock, Database,
+} from "lucide-react";
 import { CategorySchema, formatExpiryToMMYY, formatCardNumber } from "../types";
 
 interface CardFormModalProps {
@@ -14,46 +17,45 @@ interface CardFormModalProps {
 
 const spring = { type: "spring" as const, stiffness: 320, damping: 28 };
 
-const categoryColors: Record<string, { gradient: string; accent: string; ring: string }> = {
-  personal:  { gradient: "from-blue-500 to-indigo-600",    accent: "#6366f1", ring: "focus:ring-indigo-500/30 focus:border-indigo-500" },
-  financial: { gradient: "from-emerald-400 to-teal-600",   accent: "#10b981", ring: "focus:ring-emerald-500/30 focus:border-emerald-500" },
-  card:      { gradient: "from-cyan-400 to-blue-500",      accent: "#06b6d4", ring: "focus:ring-cyan-500/30 focus:border-cyan-500" },
-  media:     { gradient: "from-amber-400 to-orange-600",   accent: "#f59e0b", ring: "focus:ring-amber-500/30 focus:border-amber-500" },
-  others:    { gradient: "from-rose-400 to-pink-600",      accent: "#f43f5e", ring: "focus:ring-rose-500/30 focus:border-rose-500" },
-  documents: { gradient: "from-purple-500 to-fuchsia-600", accent: "#a855f7", ring: "focus:ring-purple-500/30 focus:border-purple-500" },
+const CAT_THEME: Record<string, { accent: string; rgb: string; gradient: string; Icon: React.ComponentType<any> }> = {
+  personal:  { accent: "#6366f1", rgb: "99,102,241",  gradient: "linear-gradient(135deg,#6366f1,#4f46e5)", Icon: User },
+  financial: { accent: "#10b981", rgb: "16,185,129",  gradient: "linear-gradient(135deg,#10b981,#059669)", Icon: Briefcase },
+  card:      { accent: "#06b6d4", rgb: "6,182,212",   gradient: "linear-gradient(135deg,#06b6d4,#0284c7)", Icon: CreditCard },
+  media:     { accent: "#f59e0b", rgb: "245,158,11",  gradient: "linear-gradient(135deg,#f59e0b,#d97706)", Icon: Mail },
+  others:    { accent: "#f43f5e", rgb: "244,63,94",   gradient: "linear-gradient(135deg,#f43f5e,#e11d48)", Icon: Lock },
+  documents: { accent: "#a855f7", rgb: "168,85,247",  gradient: "linear-gradient(135deg,#a855f7,#9333ea)", Icon: FileText },
 };
 
-export default function CardFormModal({
-  isOpen, onClose, category, initialData, onSave, isSaving
-}: CardFormModalProps) {
-  const [formData, setFormData] = useState<Record<string, any>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [generalError, setGeneralError] = useState<string>("");
-  const [fileMetaMap, setFileMetaMap] = useState<Record<string, { name: string; size: number }>>({});
-  const [isFileProcessing, setIsFileProcessing] = useState<boolean>(false);
-  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+const formatBytes = (b: number) => {
+  if (!b) return "0 B";
+  const i = Math.floor(Math.log(b) / Math.log(1024));
+  return parseFloat((b / Math.pow(1024, i)).toFixed(1)) + ["B","KB","MB"][i];
+};
+
+export default function CardFormModal({ isOpen, onClose, category, initialData, onSave, isSaving }: CardFormModalProps) {
+  const [formData, setFormData]           = useState<Record<string, any>>({});
+  const [errors, setErrors]               = useState<Record<string, string>>({});
+  const [generalError, setGeneralError]   = useState("");
+  const [fileMetaMap, setFileMetaMap]     = useState<Record<string, { name: string; size: number }>>({});
+  const [isFileProcessing, setIsFileProcessing] = useState(false);
+  const [isCameraActive, setIsCameraActive]     = useState(false);
+  const [cameraStream, setCameraStream]   = useState<MediaStream | null>(null);
   const [activeCameraField, setActiveCameraField] = useState<string | null>(null);
-  const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
-  const [cameraError, setCameraError] = useState<string>("");
+  const [facingMode, setFacingMode]       = useState<"user" | "environment">("environment");
+  const [cameraError, setCameraError]     = useState("");
+  const [focusedField, setFocusedField]   = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const colors = categoryColors[category.id] || categoryColors.others;
+  const theme = CAT_THEME[category.id] || CAT_THEME.others;
+  const { accent, rgb, gradient, Icon: CatIcon } = theme;
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ["B","KB","MB"][i];
-  };
-
-  const compressImage = (dataUrl: string): Promise<string> => {
-    return new Promise((resolve) => {
+  // ── image helpers ────────────────────────────────────────────────────────
+  const compressImage = (dataUrl: string): Promise<string> =>
+    new Promise(resolve => {
       const img = new Image();
       img.src = dataUrl;
       img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX = 750;
+        const MAX = 750, canvas = document.createElement("canvas");
         let { width, height } = img;
         if (width > height ? width > MAX : height > MAX) {
           if (width > height) { height *= MAX / width; width = MAX; }
@@ -66,7 +68,6 @@ export default function CardFormModal({
       };
       img.onerror = () => resolve(dataUrl);
     });
-  };
 
   const processSelectedFile = async (fieldKey: string, file: File) => {
     if (file.size > 2 * 1024 * 1024) { setErrors(p => ({ ...p, [fieldKey]: "File exceeds 2MB limit." })); return; }
@@ -74,11 +75,7 @@ export default function CardFormModal({
     setErrors(p => ({ ...p, [fieldKey]: "" }));
     try {
       const reader = new FileReader();
-      const loaded = await new Promise<string>((res, rej) => {
-        reader.onload = e => res(e.target?.result as string);
-        reader.onerror = rej;
-        reader.readAsDataURL(file);
-      });
+      const loaded = await new Promise<string>((res, rej) => { reader.onload = e => res(e.target?.result as string); reader.onerror = rej; reader.readAsDataURL(file); });
       const final = file.type.startsWith("image/") ? await compressImage(loaded) : loaded;
       setFormData(p => ({ ...p, [fieldKey]: final }));
       setFileMetaMap(p => ({ ...p, [fieldKey]: { name: file.name, size: Math.floor((final.length * 3) / 4) } }));
@@ -86,6 +83,7 @@ export default function CardFormModal({
     finally { setIsFileProcessing(false); }
   };
 
+  // ── camera ───────────────────────────────────────────────────────────────
   const startCamera = async (fieldKey: string, mode: "user" | "environment" = facingMode) => {
     setCameraError(""); setIsCameraActive(true); setActiveCameraField(fieldKey);
     if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
@@ -99,16 +97,12 @@ export default function CardFormModal({
     }
   };
 
-  const stopCamera = () => {
-    cameraStream?.getTracks().forEach(t => t.stop());
-    setCameraStream(null); setIsCameraActive(false); setActiveCameraField(null); setCameraError("");
-  };
+  const stopCamera = () => { cameraStream?.getTracks().forEach(t => t.stop()); setCameraStream(null); setIsCameraActive(false); setActiveCameraField(null); setCameraError(""); };
 
   const capturePhoto = async (fieldKey: string) => {
     if (!videoRef.current) return;
     try {
-      const video = videoRef.current;
-      const canvas = document.createElement("canvas");
+      const video = videoRef.current, canvas = document.createElement("canvas");
       canvas.width = video.videoWidth || 640; canvas.height = video.videoHeight || 480;
       const ctx = canvas.getContext("2d");
       if (ctx) {
@@ -123,16 +117,8 @@ export default function CardFormModal({
     finally { setIsFileProcessing(false); }
   };
 
-  useEffect(() => {
-    if (isCameraActive && cameraStream && videoRef.current) {
-      videoRef.current.srcObject = cameraStream;
-      videoRef.current.play().catch(() => {});
-    }
-  }, [cameraStream, isCameraActive]);
-
-  useEffect(() => {
-    if (!isOpen) { if (cameraStream) cameraStream.getTracks().forEach(t => t.stop()); setCameraStream(null); setIsCameraActive(false); }
-  }, [isOpen]);
+  useEffect(() => { if (isCameraActive && cameraStream && videoRef.current) { videoRef.current.srcObject = cameraStream; videoRef.current.play().catch(() => {}); } }, [cameraStream, isCameraActive]);
+  useEffect(() => { if (!isOpen && cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); setCameraStream(null); setIsCameraActive(false); } }, [isOpen]);
 
   useEffect(() => {
     if (initialData) {
@@ -166,11 +152,10 @@ export default function CardFormModal({
   };
 
   const handleBlur = (key: string, value: string) => {
+    setFocusedField(null);
     const f = category.fields.find(f => f.key === key);
     const isEmail = f?.type === "email" || key.toLowerCase().includes("email") || (category.id === "media" && key === "Userid");
-    if (isEmail && value.trim() && !value.includes("@")) {
-      setFormData(p => ({ ...p, [key]: `${value.trim()}@gmail.com` }));
-    }
+    if (isEmail && value.trim() && !value.includes("@")) setFormData(p => ({ ...p, [key]: `${value.trim()}@gmail.com` }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,8 +166,7 @@ export default function CardFormModal({
     category.fields.forEach(f => {
       const val = processed[f.key];
       const isEmail = f.type === "email" || f.key.toLowerCase().includes("email") || (category.id === "media" && f.key === "Userid");
-      if (isEmail && String(val || "").trim() && !String(val).includes("@"))
-        processed[f.key] = `${String(val).trim()}@gmail.com`;
+      if (isEmail && String(val || "").trim() && !String(val).includes("@")) processed[f.key] = `${String(val).trim()}@gmail.com`;
     });
     setFormData(processed);
 
@@ -191,254 +175,250 @@ export default function CardFormModal({
       const has = val !== undefined && String(val).trim() !== "";
       if (f.required && !has) { newErrors[f.key] = `${f.label} is required`; return; }
       if (has) {
-        if (["Name","AccountHolderName","CardHolderName","EpicNumber","PanNumber"].includes(f.key) && /[a-z]/.test(String(val)))
-          newErrors[f.key] = `${f.label} must be uppercase.`;
+        if (["Name","AccountHolderName","CardHolderName","EpicNumber","PanNumber"].includes(f.key) && /[a-z]/.test(String(val))) newErrors[f.key] = `${f.label} must be uppercase.`;
         if (f.key === "CVV" && !/^\d{3}$/.test(String(val).trim())) newErrors[f.key] = "CVV must be exactly 3 digits.";
         if (f.key === "PIN" && !/^\d+$/.test(String(val).trim())) newErrors[f.key] = "PIN must be digits only.";
-        if (f.key === "Expiry" && !/^(0[1-9]|1[0-2])\/\d{2}$/.test(String(val).trim())) newErrors[f.key] = 'Format: MM/YY';
+        if (f.key === "Expiry" && !/^(0[1-9]|1[0-2])\/\d{2}$/.test(String(val).trim())) newErrors[f.key] = "Format: MM/YY";
         if (f.key === "AdharNumber" && !/^\d{12}$/.test(String(val).replace(/[\s-]/g,""))) newErrors[f.key] = "Must be exactly 12 digits.";
         if (f.key === "PanNumber" && !/^[A-Z]{5}\d{4}[A-Z]$/.test(String(val).trim())) newErrors[f.key] = "Format: ABCDE1234F";
-        if (f.key === "AccountNumber") {
-          const c = String(val).trim().replace(/[\s-]/g,"");
-          if (!/^\d+$/.test(c)) newErrors[f.key] = "Numbers only.";
-          else if (c.length <= 10) newErrors[f.key] = "Must be > 10 digits.";
-        }
-        if (f.key === "IFSC") {
-          const c = String(val).trim();
-          if (!/^[A-Z]{4}\d[A-Z0-9]{6}$/i.test(c)) newErrors[f.key] = "Format: SBIN0001234";
-          else if (!/^[A-Z]{4}\d[A-Z0-9]{6}$/.test(c)) newErrors[f.key] = "Must be uppercase.";
-        }
-        if (f.key.toLowerCase().includes("mobilenumber")) {
-          let m = String(val).trim().replace(/[\s\-\(\)\+]/g,"");
-          if (m.startsWith("91") && m.length > 10) m = m.slice(2);
-          if (!/^[6-9]\d{9}$/.test(m)) newErrors[f.key] = "10-digit Indian mobile number.";
-        }
+        if (f.key === "AccountNumber") { const c = String(val).trim().replace(/[\s-]/g,""); if (!/^\d+$/.test(c)) newErrors[f.key] = "Numbers only."; else if (c.length <= 10) newErrors[f.key] = "Must be > 10 digits."; }
+        if (f.key === "IFSC") { const c = String(val).trim(); if (!/^[A-Z]{4}\d[A-Z0-9]{6}$/i.test(c)) newErrors[f.key] = "Format: SBIN0001234"; else if (!/^[A-Z]{4}\d[A-Z0-9]{6}$/.test(c)) newErrors[f.key] = "Must be uppercase."; }
+        if (f.key.toLowerCase().includes("mobilenumber")) { let m = String(val).trim().replace(/[\s\-\(\)\+]/g,""); if (m.startsWith("91") && m.length > 10) m = m.slice(2); if (!/^[6-9]\d{9}$/.test(m)) newErrors[f.key] = "10-digit Indian mobile number."; }
       }
     });
 
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setGeneralError("");
     const result = await onSave(processed);
-    if (typeof result === "object") {
-      if (result.success) onClose();
-      else setGeneralError(result.error || "Save failed.");
-    } else {
-      if (result) onClose();
-      else setGeneralError("Save failed. Check your setup.");
-    }
+    if (typeof result === "object") { if (result.success) onClose(); else setGeneralError(result.error || "Save failed."); }
+    else { if (result) onClose(); else setGeneralError("Save failed. Check your setup."); }
   };
 
+  // ── render ───────────────────────────────────────────────────────────────
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+
           {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0"
-            style={{ background: "rgba(3,3,20,0.85)", backdropFilter: "blur(16px)" }}
+            style={{ position: "absolute", inset: 0, background: "rgba(0,0,12,0.88)", backdropFilter: "blur(20px)" }}
           />
 
-          {/* Modal */}
+          {/* Modal sheet */}
           <motion.div
-            initial={{ opacity: 0, y: 60, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 60, scale: 0.97 }}
+            initial={{ opacity: 0, y: 80 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 80 }}
             transition={spring}
-            className="relative w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col"
             style={{
-              background: "rgba(8,8,28,0.98)",
+              position: "relative", zIndex: 1,
+              width: "100%", maxWidth: 520,
+              borderRadius: "28px 28px 0 0",
+              overflow: "hidden",
+              display: "flex", flexDirection: "column",
+              maxHeight: "92vh",
+              background: "linear-gradient(160deg, rgba(8,6,28,0.99) 0%, rgba(4,4,18,0.99) 100%)",
               border: "1px solid rgba(255,255,255,0.08)",
-              boxShadow: `0 -8px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04), 0 0 80px ${colors.accent}15`,
-              maxHeight: "92vh"
+              borderBottom: "none",
+              boxShadow: `0 -20px 80px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.03), 0 -4px 80px rgba(${rgb},0.16)`,
             }}
           >
-            {/* Gradient top border */}
-            <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${colors.gradient}`} />
+            {/* Top accent line */}
+            <div style={{ height: 2.5, flexShrink: 0, background: `linear-gradient(90deg, transparent, ${accent}, ${accent}cc, ${accent}, transparent)` }} />
+
+            {/* Drag handle */}
+            <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 2px", flexShrink: 0 }}>
+              <div style={{ width: 36, height: 4, borderRadius: 99, background: "rgba(255,255,255,0.15)" }} />
+            </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
-              <div>
-                <h3 className="text-base font-black text-white">
+            <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 22px 16px", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0 }}>
+              <div style={{ width: 46, height: 46, borderRadius: 15, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, rgba(${rgb},0.22), rgba(${rgb},0.08))`, border: `1px solid rgba(${rgb},0.28)`, boxShadow: `0 4px 20px rgba(${rgb},0.18)` }}>
+                <CatIcon style={{ width: 20, height: 20, color: accent }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "#fff", letterSpacing: "-0.3px", lineHeight: 1.2 }}>
                   {initialData ? "Edit Record" : `New ${category.title}`}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Synced to Firestore → <span className="font-mono text-slate-400">{category.sheetName}</span>
+                <p style={{ margin: 0, marginTop: 4, fontSize: 10, fontWeight: 700, color: "rgba(100,116,139,0.6)", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em" }}>
+                  Firestore → {category.sheetName}
                 </p>
               </div>
               <motion.button
-                whileHover={{ scale: 1.1, rotate: 90 }}
-                whileTap={{ scale: 0.9 }}
-                transition={{ duration: 0.15 }}
+                whileHover={{ scale: 1.1, rotate: 90 }} whileTap={{ scale: 0.9 }}
                 onClick={onClose}
-                className="p-2 rounded-xl text-slate-500 hover:bg-white/6 hover:text-white transition cursor-pointer"
+                style={{ width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", cursor: "pointer", color: "rgba(148,163,184,0.5)", flexShrink: 0, transition: "background 0.15s" }}
               >
-                <X className="h-5 w-5" />
+                <X style={{ width: 15, height: 15 }} />
               </motion.button>
             </div>
 
-            {/* Form body */}
+            {/* Form */}
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-              <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px", display: "flex", flexDirection: "column", gap: 18 }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18 }}>
+
                 {/* General error */}
                 <AnimatePresence>
                   {generalError && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      style={{ display: "flex", alignItems: "flex-start", gap: 12, borderRadius: 14, background: "rgba(244,63,94,0.09)", padding: "14px 16px", fontSize: 12, color: "#fca5a5", border: "1px solid rgba(244,63,94,0.2)" }}
-                    >
-                      <AlertCircle style={{ width: 15, height: 15, flexShrink: 0, marginTop: 1, color: "#f87171" }} />
-                      <span>{generalError}</span>
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                      style={{ display: "flex", alignItems: "flex-start", gap: 10, borderRadius: 13, background: "rgba(244,63,94,0.08)", padding: "13px 15px", fontSize: 12, color: "#fca5a5", border: "1px solid rgba(244,63,94,0.22)" }}>
+                      <AlertCircle style={{ width: 14, height: 14, flexShrink: 0, marginTop: 1, color: "#f87171" }} />
+                      <span style={{ fontWeight: 600 }}>{generalError}</span>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
                 {/* Fields */}
                 {category.fields.map((field, idx) => {
-                  const hasErr = !!errors[field.key];
-                  const inputBase = `w-full border outline-none transition-all duration-200 focus:ring-2 placeholder-slate-500 ${colors.ring}`;
-                  const inputStyle = {
-                    background: "rgba(255,255,255,0.07)",
-                    borderColor: hasErr ? "#f43f5e" : "rgba(255,255,255,0.12)",
-                    borderRadius: 14,
-                    padding: "12px 16px",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: "#fff",
+                  const hasErr   = !!errors[field.key];
+                  const isFocused = focusedField === field.key;
+
+                  const baseInput: React.CSSProperties = {
+                    width: "100%", boxSizing: "border-box",
+                    background: isFocused ? `rgba(${rgb},0.07)` : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${hasErr ? "#f43f5e" : isFocused ? accent : "rgba(255,255,255,0.09)"}`,
+                    borderRadius: 13,
+                    padding: "13px 16px",
+                    fontSize: 13.5, fontWeight: 500, color: "#fff",
+                    outline: "none",
+                    boxShadow: isFocused ? `0 0 0 3px rgba(${rgb},0.18), 0 0 24px rgba(${rgb},0.08)` : hasErr ? "0 0 0 3px rgba(244,63,94,0.12)" : "none",
+                    transition: "all 0.18s ease",
                   };
 
                   return (
-                    <motion.div
-                      key={field.key}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.025, ...spring }}
-                      style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                    <motion.div key={field.key}
+                      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.022, ...spring }}
+                      style={{ display: "flex", flexDirection: "column", gap: 0 }}
                     >
-                      <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "rgba(148,163,184,0.7)", display: "block" }}>
+                      {/* Label */}
+                      <label style={{ display: "block", marginBottom: 8, fontSize: 10, fontWeight: 800, letterSpacing: "0.16em", textTransform: "uppercase", color: isFocused ? accent : hasErr ? "#f87171" : "rgba(100,116,139,0.65)", transition: "color 0.18s" }}>
                         {field.label}
-                        {field.required && <span style={{ color: "#f43f5e", marginLeft: 4 }}>*</span>}
+                        {field.required && <span style={{ color: "#f43f5e", marginLeft: 3 }}>*</span>}
                       </label>
 
+                      {/* Select */}
                       {field.type === "select" ? (
-                        <select
-                          value={formData[field.key] || ""}
-                          onChange={e => handleInputChange(field.key, e.target.value)}
-                          className={inputBase}
-                          style={{ ...inputStyle, background: "rgba(255,255,255,0.09)", cursor: "pointer" }}
-                        >
-                          {field.options?.map(opt => <option key={opt} value={opt} style={{ background: "#0f0f2a" }}>{opt}</option>)}
-                        </select>
+                        <div style={{ position: "relative" }}>
+                          <select
+                            value={formData[field.key] || ""}
+                            onChange={e => handleInputChange(field.key, e.target.value)}
+                            onFocus={() => setFocusedField(field.key)}
+                            onBlur={() => setFocusedField(null)}
+                            style={{ ...baseInput, appearance: "none", WebkitAppearance: "none", paddingRight: 44, cursor: "pointer" }}
+                          >
+                            {field.options?.map(opt => <option key={opt} value={opt} style={{ background: "#080618", color: "#fff" }}>{opt}</option>)}
+                          </select>
+                          <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: isFocused ? accent : "rgba(148,163,184,0.4)", transition: "color 0.18s" }}>
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </div>
+                        </div>
 
                       ) : field.type === "file" ? (
-                        <div className="space-y-3">
-                          <input id={`input-${field.key}`} type="file" accept="image/*,application/pdf" className="hidden"
+                        /* ── File upload ──────────────────────────── */
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          <input id={`input-${field.key}`} type="file" accept="image/*,application/pdf" style={{ display: "none" }}
                             onChange={async e => { const f = e.target.files?.[0]; if (f) await processSelectedFile(field.key, f); }} />
 
                           {isCameraActive && activeCameraField === field.key ? (
-                            <div className="rounded-2xl border border-indigo-500/40 overflow-hidden bg-black">
-                              <div className="relative aspect-[4/3] flex items-center justify-center">
+                            <div style={{ borderRadius: 18, border: `1px solid rgba(${rgb},0.35)`, overflow: "hidden", background: "#000" }}>
+                              <div style={{ position: "relative", aspectRatio: "4/3", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 {cameraError
-                                  ? <div className="p-6 text-center">
-                                      <AlertCircle className="h-6 w-6 text-rose-400 mx-auto mb-2" />
-                                      <p className="text-xs text-rose-300 font-bold">{cameraError}</p>
+                                  ? <div style={{ padding: 24, textAlign: "center" }}>
+                                      <AlertCircle style={{ width: 24, height: 24, color: "#f87171", margin: "0 auto 10px" }} />
+                                      <p style={{ margin: 0, fontSize: 11, color: "#fca5a5", fontWeight: 700 }}>{cameraError}</p>
                                     </div>
                                   : <>
-                                      <video ref={videoRef} playsInline className="w-full h-full object-cover" />
-                                      <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/70 text-[9px] font-mono text-indigo-400">
+                                      <video ref={videoRef} playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                      <div style={{ position: "absolute", top: 8, right: 8, padding: "3px 8px", borderRadius: 6, background: "rgba(0,0,0,0.7)", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: accent }}>
                                         {facingMode === "environment" ? "REAR" : "FRONT"}
                                       </div>
                                     </>
                                 }
                               </div>
-                              <div className="flex items-center justify-between p-3 gap-2 border-t border-white/5 bg-black/60">
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", gap: 8, borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.5)" }}>
                                 <motion.button type="button" whileTap={{ scale: 0.95 }} onClick={stopCamera}
-                                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 border border-white/8 bg-white/4 hover:bg-white/8 transition">
+                                  style={{ padding: "8px 16px", borderRadius: 11, fontSize: 11, fontWeight: 700, color: "rgba(148,163,184,0.8)", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", cursor: "pointer" }}>
                                   Cancel
                                 </motion.button>
                                 {!cameraError && <>
                                   <motion.button type="button" whileTap={{ scale: 0.95 }} onClick={() => capturePhoto(field.key)}
-                                    className="px-5 py-2.5 rounded-full bg-indigo-500 hover:bg-indigo-400 text-white font-black text-xs uppercase tracking-wide flex items-center gap-1.5 shadow-lg shadow-indigo-500/30">
-                                    <Camera className="h-3.5 w-3.5" /> Capture
+                                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 20px", borderRadius: 99, background: gradient, border: `1px solid rgba(${rgb},0.4)`, color: "#fff", fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", cursor: "pointer", boxShadow: `0 4px 16px rgba(${rgb},0.35)` }}>
+                                    <Camera style={{ width: 13, height: 13 }} /> Capture
                                   </motion.button>
                                   <motion.button type="button" whileTap={{ scale: 0.95 }}
                                     onClick={() => { const next = facingMode === "environment" ? "user" : "environment"; setFacingMode(next); startCamera(field.key, next); }}
-                                    className="p-2.5 rounded-xl border border-white/8 bg-white/4 hover:bg-white/8 text-slate-300 transition">
-                                    <RefreshCw className="h-4 w-4" />
+                                    style={{ width: 36, height: 36, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.04)", color: "rgba(148,163,184,0.7)", cursor: "pointer" }}>
+                                    <RefreshCw style={{ width: 15, height: 15 }} />
                                   </motion.button>
                                 </>}
                               </div>
                             </div>
 
                           ) : formData[field.key] ? (
-                            <div className="flex items-center gap-3 p-3.5 rounded-2xl border border-white/8 bg-white/3">
-                              <div className="h-12 w-12 rounded-xl overflow-hidden bg-white/5 border border-white/5 shrink-0 flex items-center justify-center">
+                            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, border: `1px solid rgba(${rgb},0.2)`, background: `rgba(${rgb},0.05)` }}>
+                              <div style={{ width: 48, height: 48, borderRadius: 12, overflow: "hidden", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 {formData[field.key].startsWith("data:image/")
-                                  ? <img src={formData[field.key]} alt="preview" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
-                                  : <FileText className="h-6 w-6 text-indigo-400" />
+                                  ? <img src={formData[field.key]} alt="preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                  : <FileText style={{ width: 22, height: 22, color: accent }} />
                                 }
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-white truncate">
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {fileMetaMap[field.key]?.name || "Attached File"}
                                 </p>
-                                <p className="text-[10px] text-indigo-400 font-bold mt-0.5">
+                                <p style={{ margin: 0, marginTop: 3, fontSize: 10, fontWeight: 700, color: accent }}>
                                   {fileMetaMap[field.key]?.size ? formatBytes(fileMetaMap[field.key].size) : "Saved"} · Firestore
                                 </p>
                               </div>
-                              <div className="flex items-center gap-1.5">
-                                <motion.button type="button" whileTap={{ scale: 0.95 }}
-                                  onClick={() => startCamera(field.key, "environment")}
-                                  className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 transition">
-                                  <Camera className="h-3.5 w-3.5" />
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={() => startCamera(field.key, "environment")}
+                                  style={{ width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: `rgba(${rgb},0.1)`, border: `1px solid rgba(${rgb},0.2)`, color: accent, cursor: "pointer" }}>
+                                  <Camera style={{ width: 13, height: 13 }} />
                                 </motion.button>
                                 <label htmlFor={`input-${field.key}`}
-                                  className="cursor-pointer px-3 py-1.5 rounded-xl bg-white/5 border border-white/8 text-xs font-bold text-slate-400 hover:bg-white/8 hover:text-white transition flex items-center gap-1">
-                                  <Upload className="h-3 w-3" /> Replace
+                                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", fontSize: 11, fontWeight: 700, color: "rgba(148,163,184,0.7)", cursor: "pointer" }}>
+                                  <Upload style={{ width: 11, height: 11 }} /> Replace
                                 </label>
-                                <motion.button type="button" whileTap={{ scale: 0.95 }}
+                                <motion.button type="button" whileTap={{ scale: 0.9 }}
                                   onClick={() => { setFormData(p => ({ ...p, [field.key]: "" })); setFileMetaMap(p => { const n = { ...p }; delete n[field.key]; return n; }); }}
-                                  className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition">
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  style={{ width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.2)", color: "#f87171", cursor: "pointer" }}>
+                                  <Trash2 style={{ width: 13, height: 13 }} />
                                 </motion.button>
                               </div>
                             </div>
 
                           ) : (
                             <div
-                              onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.background = `${colors.accent}08`; }}
+                              onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = accent; e.currentTarget.style.background = `rgba(${rgb},0.06)`; }}
                               onDragLeave={e => { e.currentTarget.style.borderColor = ""; e.currentTarget.style.background = ""; }}
                               onDrop={async e => { e.preventDefault(); e.currentTarget.style.borderColor = ""; e.currentTarget.style.background = ""; const f = e.dataTransfer.files?.[0]; if (f) await processSelectedFile(field.key, f); }}
-                              className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-200 ${hasErr ? "border-rose-500/50" : "border-white/8"}`}
-                              style={{ background: "rgba(255,255,255,0.02)" }}
+                              style={{ border: `2px dashed ${hasErr ? "rgba(244,63,94,0.5)" : "rgba(255,255,255,0.09)"}`, borderRadius: 16, padding: "28px 20px", textAlign: "center", background: "rgba(255,255,255,0.018)", transition: "all 0.2s" }}
                             >
-                              <div className="flex justify-center mb-3">
+                              <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
                                 {isFileProcessing
-                                  ? <div className="h-10 w-10 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
-                                  : <div className="p-2.5 rounded-xl bg-white/5 border border-white/8 text-slate-500">
-                                      <Upload className="h-5 w-5" />
+                                  ? <div style={{ width: 40, height: 40, borderRadius: "50%", border: `2px solid rgba(${rgb},0.25)`, borderTopColor: accent, animation: "spin 0.8s linear infinite" }} />
+                                  : <div style={{ width: 44, height: 44, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                                      <Upload style={{ width: 18, height: 18, color: "rgba(100,116,139,0.6)" }} />
                                     </div>
                                 }
                               </div>
-                              <p className="text-sm font-bold text-slate-300 mb-1">
-                                {isFileProcessing ? "Processing..." : "Drop file or choose below"}
+                              <p style={{ margin: 0, marginBottom: 4, fontSize: 13, fontWeight: 700, color: "rgba(203,213,225,0.8)" }}>
+                                {isFileProcessing ? "Processing…" : "Drop file here or choose below"}
                               </p>
-                              <p className="text-[10px] text-slate-600 mb-4">PDF, JPG, PNG — max 2MB</p>
-                              <div className="flex justify-center gap-2">
+                              <p style={{ margin: 0, marginBottom: 16, fontSize: 10, color: "rgba(100,116,139,0.5)" }}>PDF, JPG, PNG — max 2 MB</p>
+                              <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
                                 <motion.button type="button" whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                                   onClick={() => document.getElementById(`input-${field.key}`)?.click()}
-                                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 border border-white/8 text-xs font-bold text-slate-300 hover:bg-white/8 hover:text-white transition cursor-pointer">
-                                  <Upload className="h-3.5 w-3.5" /> Upload File
+                                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 11, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", fontSize: 11, fontWeight: 700, color: "rgba(148,163,184,0.8)", cursor: "pointer" }}>
+                                  <Upload style={{ width: 12, height: 12 }} /> Upload File
                                 </motion.button>
                                 <motion.button type="button" whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                                   onClick={() => startCamera(field.key, "environment")}
-                                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-500/15 border border-indigo-500/25 text-xs font-bold text-indigo-300 hover:bg-indigo-500/25 transition cursor-pointer">
-                                  <Camera className="h-3.5 w-3.5" /> Camera
+                                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 11, background: `rgba(${rgb},0.1)`, border: `1px solid rgba(${rgb},0.22)`, fontSize: 11, fontWeight: 700, color: accent, cursor: "pointer" }}>
+                                  <Camera style={{ width: 12, height: 12 }} /> Camera
                                 </motion.button>
                               </div>
                             </div>
@@ -446,27 +426,24 @@ export default function CardFormModal({
                         </div>
 
                       ) : (
+                        /* ── Text / number / email inputs ─────────── */
                         <input
                           type={field.type}
                           placeholder={field.placeholder}
                           value={formData[field.key] || ""}
                           onChange={e => handleInputChange(field.key, e.target.value)}
+                          onFocus={() => setFocusedField(field.key)}
                           onBlur={e => handleBlur(field.key, e.target.value)}
-                          className={inputBase}
-                          style={inputStyle}
+                          style={baseInput}
                         />
                       )}
 
                       {/* Field error */}
                       <AnimatePresence>
                         {hasErr && (
-                          <motion.p
-                            initial={{ opacity: 0, y: -4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="text-[10px] text-rose-400 font-bold flex items-center gap-1 pl-1"
-                          >
-                            <AlertCircle className="h-3 w-3 shrink-0" />
+                          <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                            style={{ display: "flex", alignItems: "center", gap: 5, margin: "6px 0 0 2px", fontSize: 10, fontWeight: 700, color: "#f87171" }}>
+                            <AlertCircle style={{ width: 11, height: 11, flexShrink: 0 }} />
                             {errors[field.key]}
                           </motion.p>
                         )}
@@ -476,52 +453,22 @@ export default function CardFormModal({
                 })}
               </div>
 
-              {/* Footer actions */}
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-                padding: "14px 24px", borderTop: "1px solid rgba(255,255,255,0.05)",
-                background: "rgba(255,255,255,0.02)", flexShrink: 0,
-              }}>
-                <motion.button
-                  type="button" onClick={onClose} disabled={isSaving}
+              {/* Footer */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 22px 20px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.22)", flexShrink: 0 }}>
+                <motion.button type="button" onClick={onClose} disabled={isSaving}
                   whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                  style={{
-                    padding: "11px 22px", borderRadius: 12, cursor: "pointer",
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    fontSize: 12, fontWeight: 700, color: "rgba(148,163,184,0.8)",
-                    opacity: isSaving ? 0.4 : 1,
-                  }}
-                >
+                  style={{ padding: "12px 24px", borderRadius: 13, cursor: "pointer", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", fontSize: 12, fontWeight: 700, color: "rgba(148,163,184,0.75)", opacity: isSaving ? 0.4 : 1, transition: "all 0.15s" }}>
                   Cancel
                 </motion.button>
 
-                <motion.button
-                  type="submit" disabled={isSaving}
-                  whileHover={{ scale: 1.03, boxShadow: `0 8px 28px ${colors.accent}55, inset 0 1px 0 rgba(255,255,255,0.25)` }}
+                <motion.button type="submit" disabled={isSaving}
+                  whileHover={{ scale: 1.03, boxShadow: `0 10px 36px rgba(${rgb},0.55), inset 0 1px 0 rgba(255,255,255,0.25)` }}
                   whileTap={{ scale: 0.97 }}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                    padding: "11px 28px", borderRadius: 12, cursor: "pointer",
-                    background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accent}cc 100%)`,
-                    border: `1px solid ${colors.accent}55`,
-                    boxShadow: `0 4px 20px ${colors.accent}40, inset 0 1px 0 rgba(255,255,255,0.16)`,
-                    fontSize: 12, fontWeight: 900, color: "#fff",
-                    letterSpacing: "0.06em", textTransform: "uppercase" as const,
-                    opacity: isSaving ? 0.6 : 1,
-                  }}
-                >
-                  {isSaving ? (
-                    <>
-                      <div style={{ width: 13, height: 13, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", animation: "spin 0.7s linear infinite" }} />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save style={{ width: 13, height: 13 }} />
-                      Save Record
-                    </>
-                  )}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 30px", borderRadius: 13, cursor: isSaving ? "not-allowed" : "pointer", background: gradient, border: `1px solid rgba(${rgb},0.5)`, boxShadow: `0 4px 24px rgba(${rgb},0.4), inset 0 1px 0 rgba(255,255,255,0.18)`, fontSize: 12, fontWeight: 900, color: "#fff", letterSpacing: "0.07em", textTransform: "uppercase", opacity: isSaving ? 0.65 : 1, transition: "opacity 0.15s" }}>
+                  {isSaving
+                    ? <><div style={{ width: 13, height: 13, borderRadius: "50%", border: "2.5px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", animation: "spin 0.7s linear infinite" }} /> Saving…</>
+                    : <><Save style={{ width: 13, height: 13 }} /> Save Record</>
+                  }
                 </motion.button>
               </div>
             </form>
